@@ -1034,6 +1034,96 @@ function getWebRTCIPs(){
   });
 }
 
+// Fingerprint de audio: renderiza um tom num OfflineAudioContext e gera um hash
+// do resultado. O "stack" de audio varia por SO/driver/hardware — silencioso.
+function audioFingerprint(){
+  return new Promise(resolve=>{
+    try{
+      const Ctx=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+      if(!Ctx)return resolve(null);
+      const ctx=new Ctx(1,5000,44100);
+      const osc=ctx.createOscillator();osc.type='triangle';osc.frequency.value=10000;
+      const comp=ctx.createDynamicsCompressor();
+      osc.connect(comp);comp.connect(ctx.destination);
+      osc.start(0);
+      const guard=setTimeout(()=>resolve(null),1500);
+      ctx.oncomplete=e=>{
+        clearTimeout(guard);
+        const buf=e.renderedBuffer.getChannelData(0);
+        let acc=0;for(let i=0;i<buf.length;i++)acc+=Math.abs(buf[i]);
+        resolve('afp_'+Math.round(acc*1000).toString(16));
+      };
+      ctx.startRendering();
+    }catch(e){resolve(null);}
+  });
+}
+
+// WebGL detalhado: versao, limites e numero de extensoes -> vira um hash estavel
+// que complementa o canvas fingerprint (rastreio sem cookies).
+function getWebGLDetails(){
+  try{
+    const c=document.createElement('canvas');
+    const gl=c.getContext('webgl')||c.getContext('experimental-webgl');
+    if(!gl)return{};
+    const exts=gl.getSupportedExtensions()||[];
+    const parts=[
+      gl.getParameter(gl.VERSION),gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+      gl.getParameter(gl.MAX_TEXTURE_SIZE),gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
+      gl.getParameter(gl.MAX_VERTEX_ATTRIBS),exts.join(',')
+    ].join('|');
+    let h=0;for(let i=0;i<parts.length;i++){h=(h*31+parts.charCodeAt(i))|0;}
+    return{
+      glVersion:gl.getParameter(gl.VERSION),
+      glMaxTexture:gl.getParameter(gl.MAX_TEXTURE_SIZE),
+      glExtCount:exts.length,
+      webglFp:'wgl_'+(h>>>0).toString(16)
+    };
+  }catch(e){return{};}
+}
+
+// "Superficie" de APIs que o navegador expoe (apenas deteccao de recurso).
+function getApiSupport(){
+  const has=(o,k)=>{try{return o&&(k in o);}catch(e){return false;}};
+  return{
+    webauthn:has(window,'PublicKeyCredential'),
+    bluetooth:has(navigator,'bluetooth'),
+    usb:has(navigator,'usb'),
+    serial:has(navigator,'serial'),
+    hid:has(navigator,'hid'),
+    nfc:has(window,'NDEFReader'),
+    webgpu:has(navigator,'gpu'),
+    serviceWorker:has(navigator,'serviceWorker'),
+    paymentRequest:has(window,'PaymentRequest'),
+    credentials:has(navigator,'credentials'),
+    wasm:has(window,'WebAssembly')
+  };
+}
+
+// Codecs de video/audio suportados (pista de SO/hardware/licencas).
+function getCodecs(){
+  const v=document.createElement('video');
+  const ok=t=>{try{return !!v.canPlayType(t);}catch(e){return false;}};
+  const list=[];
+  if(ok('video/mp4; codecs="avc1.42E01E"'))list.push('H.264');
+  if(ok('video/webm; codecs="vp9"'))list.push('VP9');
+  if(ok('video/mp4; codecs="hev1.1.6.L93.B0"'))list.push('HEVC');
+  if(ok('video/mp4; codecs="av01.0.05M.08"'))list.push('AV1');
+  if(ok('audio/mp4; codecs="mp4a.40.2"'))list.push('AAC');
+  if(ok('audio/ogg; codecs="opus"'))list.push('Opus');
+  if(ok('audio/flac'))list.push('FLAC');
+  return list;
+}
+
+// Vozes de sintese de fala instaladas -> revela pacotes de idioma / SO.
+function getVoices(){
+  try{
+    if(!window.speechSynthesis)return null;
+    const vs=speechSynthesis.getVoices()||[];
+    const langs=[...new Set(vs.map(v=>v.lang))];
+    return{count:vs.length,langs:langs.slice(0,12)};
+  }catch(e){return null;}
+}
+
 // Coleta os dados disponiveis no navegador.
 async function collectData(){
   const ua=navigator.userAgent||'';
@@ -1081,13 +1171,22 @@ async function collectData(){
 
   Object.assign(data,getGPU());
 
-  // Bateria (assincrono, pode nao existir).
+  // Bateria (API Battery Status): so existe em navegadores Chromium (Chrome/Edge/
+  // Opera). Firefox removeu e Safari/iOS nunca tiveram -> por isso aparece em uns
+  // acessos e em outros nao. Em desktop sem bateria volta 100%/carregando.
   try{
     if(navigator.getBattery){
       const b=await navigator.getBattery();
-      data.battery={level:b.level,charging:b.charging};
+      data.battery={
+        level:b.level,charging:b.charging,
+        chargingTime:isFinite(b.chargingTime)?b.chargingTime:null,
+        dischargingTime:isFinite(b.dischargingTime)?b.dischargingTime:null
+      };
+      data.batterySupported=true;
+    }else{
+      data.batterySupported=false;
     }
-  }catch(e){}
+  }catch(e){ data.batterySupported=false; }
 
   // Client Hints de alta entropia (Chrome/Edge): MODELO do aparelho (no celular!),
   // versao do SO, arquitetura, lista completa de versoes do navegador.
@@ -1158,6 +1257,89 @@ async function collectData(){
 
   // Global Privacy Control (sinal de privacidade que o usuario habilitou).
   data.gpc=navigator.globalPrivacyControl||null;
+
+  // ── Dados adicionais (todos silenciosos e ja expostos pelo navegador) ──
+
+  // WebGL detalhado + fingerprint de WebGL.
+  Object.assign(data,getWebGLDetails());
+
+  // Capacidades/APIs disponiveis no navegador.
+  data.apiSupport=getApiSupport();
+
+  // Codecs de video/audio suportados.
+  try{ data.codecs=getCodecs(); }catch(e){}
+
+  // Vozes de sintese de fala (pacotes de idioma instalados).
+  data.voices=getVoices();
+
+  // Fingerprint de audio (assincrono; identifica o stack de audio).
+  try{ data.audioFp=await audioFingerprint(); }catch(e){}
+
+  // Multi-monitor, leitor de PDF embutido e estado de conexao.
+  try{ data.screenExtended=(screen.isExtended===true); }catch(e){}
+  data.pdfViewerEnabled=(navigator.pdfViewerEnabled===true);
+  data.online=navigator.onLine;
+
+  // Tipo de ponteiro (mouse x toque) e capacidade de hover.
+  try{
+    data.pointer=window.matchMedia('(pointer: fine)').matches?'fino (mouse)'
+      :(window.matchMedia('(pointer: coarse)').matches?'grosso (toque)':'n/d');
+    data.hover=window.matchMedia('(hover: hover)').matches;
+  }catch(e){}
+
+  // Memoria JS do processo (Chrome): uso/limite do heap.
+  try{
+    if(performance&&performance.memory){
+      data.jsHeap={
+        usedMB:Math.round(performance.memory.usedJSHeapSize/1048576),
+        totalMB:Math.round(performance.memory.totalJSHeapSize/1048576),
+        limitMB:Math.round(performance.memory.jsHeapSizeLimit/1048576)
+      };
+    }
+  }catch(e){}
+
+  // Como o usuario chegou (navegacao/recarga/voltar) e tempo de carregamento.
+  try{
+    const nav=performance.getEntriesByType('navigation')[0];
+    if(nav){ data.navType=nav.type; data.loadTimeMs=Math.round(nav.duration); }
+  }catch(e){}
+
+  // Detalhes de localizacao do Intl (idioma/calendario/numeracao).
+  try{
+    const r=Intl.DateTimeFormat().resolvedOptions();
+    data.locale={locale:r.locale,calendar:r.calendar,numbering:r.numberingSystem};
+  }catch(e){}
+
+  // Visitante recorrente SEM cookies (localStorage) — mostra rastreio persistente.
+  try{
+    const k='_ca_visit';
+    const prev=JSON.parse(localStorage.getItem(k)||'null');
+    const now=new Date().toISOString();
+    if(prev&&prev.count){
+      data.returning=true; data.visitCount=prev.count+1; data.firstSeen=prev.first;
+      localStorage.setItem(k,JSON.stringify({count:prev.count+1,first:prev.first}));
+    }else{
+      data.returning=false; data.visitCount=1; data.firstSeen=now;
+      localStorage.setItem(k,JSON.stringify({count:1,first:now}));
+    }
+  }catch(e){}
+
+  // ── ID ESTAVEL DO VISITANTE (fingerprint composto) ──
+  // Junta varios sinais estaveis num unico hash. Demonstra, na pratica, que mesmo
+  // SEM cookies e SEM saber o nome, o site reconhece o MESMO aparelho a cada visita
+  // (a forca por tras do rastreamento por fingerprint).
+  try{
+    const sig=[
+      data.userAgent,data.platform,data.language,(data.languages||[]).join(','),
+      data.timezone,
+      data.screen&&(data.screen.width+'x'+data.screen.height+'x'+data.screen.colorDepth),
+      data.hardwareConcurrency,data.deviceMemory,data.gpuRenderer,
+      data.canvasFp,data.webglFp,data.audioFp,(data.fonts||[]).join(',')
+    ].join('§');
+    let h=0x811c9dc5;                 // FNV-1a 32 bits (estavel entre acessos)
+    for(let i=0;i<sig.length;i++){ h^=sig.charCodeAt(i); h=(h*0x01000193)>>>0; }
+    data.visitorId='id_'+h.toString(16).padStart(8,'0');
+  }catch(e){}
 
   // NOTA: GPS (navigator.geolocation) NAO e usado — exige um prompt visivel ao
   // usuario, o que descaracterizaria a coleta silenciosa. A localizacao

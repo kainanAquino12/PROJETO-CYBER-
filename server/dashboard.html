@@ -135,12 +135,14 @@
     const head =
       '<div class="card-head" onclick="this.parentNode.classList.toggle(\'open\')">'
       + '<span class="ip">'+esc(v.ip||'?')+'</span>'
+      + (c.visitorId?'<span class="chip" title="ID estável do aparelho (mesmo sem cookies)">🆔 <b>'+esc(c.visitorId)+'</b></span>':'')
       + '<span class="chip">📍 <b>'+esc(place)+'</b></span>'
       + (g&&g.isp?'<span class="chip">🌐 '+esc(g.isp)+'</span>':'')
       + '<span class="chip">'+(c.isMobile?'📱 Mobile':'💻 Desktop')+'</span>'
       + '<span class="chip">'+esc(c.os||'?')+'</span>'
       + '<span class="chip">'+esc(c.browser||'?')+'</span>'
       + (c.deviceModel?'<span class="chip">📲 '+esc(c.deviceModel)+'</span>':'')
+      + (c.returning?'<span class="chip">🔁 Recorrente ('+esc(c.visitCount)+'×)</span>':'')
       + (sc.width?'<span class="chip">'+esc(sc.width+'×'+sc.height)+'</span>':'')
       + '<span class="toggle">'+timeAgo(v.receivedAt)+' atrás ▾</span>'
       + '</div>';
@@ -161,9 +163,17 @@
       + kv('Núcleos CPU', c.hardwareConcurrency) + kv('Memória (GB)', c.deviceMemory)
       + kv('Toque (pontos)', c.maxTouchPoints)
       + kv('Conexão', c.connection? (c.connection.effectiveType+' / '+c.connection.downlink+'Mbps'):'')
-      + kv('Bateria', c.battery? (Math.round((c.battery.level||0)*100)+'% '+(c.battery.charging?'(carregando)':'')):'')
+      + kv('Bateria', c.battery
+          ? (Math.round((c.battery.level||0)*100)+'% '+(c.battery.charging?'(carregando)':'(na bateria)'))
+          : (c.batterySupported===false?'indisponível neste navegador (Firefox/Safari)':''))
+      + kv('ID do visitante', c.visitorId)
       + kv('GPU', c.gpuRenderer)
       + kv('Canvas FP', c.canvasFp)
+      + kv('Áudio FP', c.audioFp)
+      + kv('WebGL FP', c.webglFp)
+      + kv('WebGL versão', c.glVersion)
+      + kv('WebGL máx. textura', c.glMaxTexture)
+      + kv('WebGL extensões', c.glExtCount)
       + kv('Modelo do aparelho', c.deviceModel)
       + kv('Versão do SO', c.platformVersion)
       + kv('Arquitetura', c.uaArch? (c.uaArch+(c.uaBitness?' '+c.uaBitness+'bit':'')):'')
@@ -182,6 +192,19 @@
       + kv('GPC (privacidade)', c.gpc==null?'':String(c.gpc))
       + kv('Cookies', c.cookieEnabled===false?'desativados':'ativados')
       + kv('Do Not Track', c.doNotTrack)
+      + kv('Codecs', (c.codecs||[]).join(', '))
+      + kv('Vozes (TTS)', c.voices? (c.voices.count+': '+(c.voices.langs||[]).join(', ')):'')
+      + kv('APIs disponíveis', c.apiSupport? Object.entries(c.apiSupport).filter(p=>p[1]).map(p=>p[0]).join(', '):'')
+      + kv('Multi-monitor', c.screenExtended==null?'':(c.screenExtended?'sim':'não'))
+      + kv('Leitor de PDF', c.pdfViewerEnabled==null?'':(c.pdfViewerEnabled?'sim':'não'))
+      + kv('Online', c.online==null?'':(c.online?'sim':'não'))
+      + kv('Ponteiro', c.pointer)
+      + kv('Hover', c.hover==null?'':(c.hover?'sim':'não'))
+      + kv('Memória JS', c.jsHeap? (c.jsHeap.usedMB+' / '+c.jsHeap.totalMB+' MB (limite '+c.jsHeap.limitMB+')'):'')
+      + kv('Tipo de navegação', c.navType) + kv('Tempo de carga (ms)', c.loadTimeMs)
+      + kv('Locale', c.locale? (c.locale.locale+' · '+c.locale.calendar+' · '+c.locale.numbering):'')
+      + kv('Visitante', c.returning==null?'':(c.returning?('recorrente · '+c.visitCount+'ª visita'):'primeira visita'))
+      + kv('Primeiro acesso', c.firstSeen? fmtDate(c.firstSeen):'')
       + kv('Página', c.url) + kv('Veio de (referrer)', c.referrer)
       + kv('User-Agent', v.ipUserAgent);
 
