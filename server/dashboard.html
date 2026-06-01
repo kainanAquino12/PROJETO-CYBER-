@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Dashboard · Dados coletados — Demo educativa</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --navy:#07111f;--navy2:#0c1d36;--navy3:#122548;
+    --blue:#2563eb;--blue3:#3b82f6;--blue4:#60a5fa;
+    --gold:#b07d20;--gold2:#c99530;--gold3:#e4b84a;
+    --white:#eef2ff;--gray:#7a8ba8;--gray2:#b0bdd4;
+    --border:rgba(255,255,255,0.08);--surface:rgba(255,255,255,0.03);--surface2:rgba(255,255,255,0.06);
+    --danger:#ef4444;--ok:#22c55e;
+    --sans:'Segoe UI',system-ui,sans-serif;--mono:ui-monospace,'Cascadia Code','Consolas',monospace;
+  }
+  body{background:var(--navy);color:var(--white);font-family:var(--sans);line-height:1.5;min-height:100vh}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-track{background:var(--navy)}
+  ::-webkit-scrollbar-thumb{background:var(--navy3);border-radius:4px}
+  a{color:var(--blue4)}
+
+  .warn{background:linear-gradient(90deg,#3a1d00,#1a0e00);border-bottom:1px solid var(--gold);
+    color:var(--gold3);font-size:13px;padding:8px 20px;text-align:center;font-weight:600;letter-spacing:.02em}
+
+  header{padding:22px 20px 16px;border-bottom:1px solid var(--border);display:flex;
+    align-items:center;gap:16px;flex-wrap:wrap}
+  header h1{font-size:20px;font-weight:800;letter-spacing:-.4px}
+  header h1 span{color:var(--gold3)}
+  header .sub{font-size:12px;color:var(--gray);margin-top:2px}
+  .grow{flex:1}
+  .btn{background:var(--surface2);border:1px solid var(--border);color:var(--white);
+    padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;
+    transition:.15s;font-family:inherit}
+  .btn:hover{background:var(--navy3);border-color:var(--blue)}
+  .btn.danger:hover{border-color:var(--danger);color:#fca5a5}
+  .btn.gold{background:var(--gold);border-color:var(--gold2);color:#1a0e00}
+  .btn.gold:hover{background:var(--gold2)}
+
+  .stats{display:flex;gap:14px;flex-wrap:wrap;padding:18px 20px}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    padding:14px 18px;min-width:130px}
+  .stat .n{font-size:26px;font-weight:800;color:var(--blue4);font-family:var(--mono)}
+  .stat .l{font-size:11px;color:var(--gray);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
+
+  .wrap{padding:0 20px 60px;max-width:1280px;margin:0 auto}
+  .empty{color:var(--gray);text-align:center;padding:60px 20px;font-size:15px}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+    margin-bottom:12px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;flex-wrap:wrap}
+  .card-head:hover{background:var(--surface2)}
+  .ip{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--gold3)}
+  .chip{background:var(--navy3);border:1px solid var(--border);border-radius:999px;
+    padding:3px 11px;font-size:12px;color:var(--gray2);white-space:nowrap}
+  .chip b{color:var(--white);font-weight:600}
+  .when{font-size:12px;color:var(--gray);font-family:var(--mono)}
+  .flag{font-size:12px;color:var(--blue4)}
+  .toggle{margin-left:auto;color:var(--gray);font-size:12px;user-select:none}
+
+  .card-body{display:none;border-top:1px solid var(--border);padding:14px 16px;
+    background:rgba(0,0,0,.18)}
+  .card.open .card-body{display:block}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px 18px;margin-bottom:14px}
+  .kv{font-size:13px;display:flex;gap:8px;border-bottom:1px dashed var(--border);padding:4px 0}
+  .kv .k{color:var(--gray);min-width:120px;flex-shrink:0}
+  .kv .v{color:var(--white);word-break:break-word;font-family:var(--mono);font-size:12px}
+  details{margin-top:8px}
+  details summary{cursor:pointer;color:var(--blue4);font-size:13px;font-weight:600;padding:6px 0}
+  pre{background:#020812;border:1px solid var(--border);border-radius:10px;padding:14px;
+    font-family:var(--mono);font-size:12px;color:var(--gray2);overflow:auto;max-height:420px;
+    white-space:pre-wrap;word-break:break-word}
+  .err{color:#fca5a5;text-align:center;padding:50px 20px}
+  .auto{font-size:12px;color:var(--gray);display:flex;align-items:center;gap:6px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
+</style>
+</head>
+<body>
+<div class="warn">⚠ DEMONSTRAÇÃO EDUCATIVA — Conscientização sobre sites falsos · uso apenas em ambiente controlado e com consentimento</div>
+
+<header>
+  <div>
+    <h1>Dados <span>coletados</span></h1>
+    <div class="sub">Painel do projeto de conscientização — CA Engenharia de Software · PUC PR Toledo</div>
+  </div>
+  <div class="grow"></div>
+  <div class="auto"><span class="dot"></span> auto-atualiza a cada 10s</div>
+  <button class="btn gold" onclick="load()">↻ Atualizar</button>
+  <button class="btn danger" onclick="clearAll()">🗑 Limpar dados</button>
+</header>
+
+<div class="stats">
+  <div class="stat"><div class="n" id="stTotal">—</div><div class="l">Visitas</div></div>
+  <div class="stat"><div class="n" id="stCountries">—</div><div class="l">Países</div></div>
+  <div class="stat"><div class="n" id="stMobile">—</div><div class="l">Mobile</div></div>
+  <div class="stat"><div class="n" id="stLast">—</div><div class="l">Última</div></div>
+</div>
+
+<div class="wrap">
+  <div id="list"><div class="empty">Carregando…</div></div>
+</div>
+
+<script>
+  // Chave de acesso: vem de ?key=... na URL ou e pedida via prompt.
+  const params = new URLSearchParams(location.search);
+  let KEY = params.get('key') || '';
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+  function fmtDate(iso){ if(!iso) return '—'; const d=new Date(iso); return d.toLocaleString('pt-BR'); }
+  function timeAgo(iso){ if(!iso) return '—'; const s=(Date.now()-new Date(iso))/1000;
+    if(s<60) return Math.floor(s)+'s'; if(s<3600) return Math.floor(s/60)+'min';
+    if(s<86400) return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d'; }
+
+  async function api(method){
+    const url = '/api/visits' + (KEY ? ('?key='+encodeURIComponent(KEY)) : '');
+    return fetch(url, { method });
+  }
+
+  function kv(k,v){ if(v==null||v==='') return ''; return '<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+esc(v)+'</span></div>'; }
+
+  function renderVisit(v){
+    const c = v.client || {};
+    const g = v.geo || null;
+    const sc = c.screen || {};
+    const place = g ? [g.city,g.region,g.country].filter(Boolean).join(', ') : 'IP local / sem geo';
+    const mapLink = (g && g.lat!=null && g.lon!=null)
+      ? '<a href="https://www.openstreetmap.org/?mlat='+g.lat+'&mlon='+g.lon+'#map=12/'+g.lat+'/'+g.lon+'" target="_blank" rel="noopener">ver no mapa ↗</a>' : '';
+
+    const head =
+      '<div class="card-head" onclick="this.parentNode.classList.toggle(\'open\')">'
+      + '<span class="ip">'+esc(v.ip||'?')+'</span>'
+      + '<span class="chip">📍 <b>'+esc(place)+'</b></span>'
+      + (g&&g.isp?'<span class="chip">🌐 '+esc(g.isp)+'</span>':'')
+      + '<span class="chip">'+(c.isMobile?'📱 Mobile':'💻 Desktop')+'</span>'
+      + '<span class="chip">'+esc(c.os||'?')+'</span>'
+      + '<span class="chip">'+esc(c.browser||'?')+'</span>'
+      + (sc.width?'<span class="chip">'+esc(sc.width+'×'+sc.height)+'</span>':'')
+      + '<span class="toggle">'+timeAgo(v.receivedAt)+' atrás ▾</span>'
+      + '</div>';
+
+    const fields =
+        kv('IP', v.ip)
+      + kv('Recebido em', fmtDate(v.receivedAt))
+      + kv('País', g&&g.country) + kv('Região', g&&g.region) + kv('Cidade', g&&g.city)
+      + kv('CEP/ZIP', g&&g.zip) + kv('ISP', g&&g.isp) + kv('Organização', g&&g.org) + kv('ASN', g&&g.asn)
+      + (mapLink?'<div class="kv"><span class="k">Mapa</span><span class="v">'+mapLink+'</span></div>':'')
+      + kv('Sistema', c.os) + kv('Navegador', c.browser) + kv('Plataforma', c.platform)
+      + kv('Dispositivo', c.isMobile?'Mobile':'Desktop')
+      + kv('Idioma', c.language) + kv('Idiomas', (c.languages||[]).join(', '))
+      + kv('Fuso horário', c.timezone) + kv('Offset (min)', c.timezoneOffset)
+      + kv('Tela', sc.width? (sc.width+'×'+sc.height+' ('+(sc.colorDepth||'?')+'bit)') : '')
+      + kv('Viewport', c.viewport? (c.viewport.innerWidth+'×'+c.viewport.innerHeight):'')
+      + kv('Densidade px', c.devicePixelRatio)
+      + kv('Núcleos CPU', c.hardwareConcurrency) + kv('Memória (GB)', c.deviceMemory)
+      + kv('Toque (pontos)', c.maxTouchPoints)
+      + kv('Conexão', c.connection? (c.connection.effectiveType+' / '+c.connection.downlink+'Mbps'):'')
+      + kv('Bateria', c.battery? (Math.round((c.battery.level||0)*100)+'% '+(c.battery.charging?'(carregando)':'')):'')
+      + kv('GPU', c.gpuRenderer)
+      + kv('Canvas FP', c.canvasFp)
+      + kv('Cookies', c.cookieEnabled===false?'desativados':'ativados')
+      + kv('Do Not Track', c.doNotTrack)
+      + kv('Página', c.url) + kv('Veio de (referrer)', c.referrer)
+      + kv('User-Agent', v.ipUserAgent);
+
+    const body =
+      '<div class="card-body"><div class="grid">'+fields+'</div>'
+      + '<details><summary>Ver JSON bruto completo</summary><pre>'+esc(JSON.stringify(v,null,2))+'</pre></details>'
+      + '</div>';
+
+    return '<div class="card">'+head+body+'</div>';
+  }
+
+  function renderStats(visits){
+    document.getElementById('stTotal').textContent = visits.length;
+    const countries = new Set(visits.map(v=>v.geo&&v.geo.country).filter(Boolean));
+    document.getElementById('stCountries').textContent = countries.size || 0;
+    const mob = visits.filter(v=>v.client&&v.client.isMobile).length;
+    document.getElementById('stMobile').textContent = mob;
+    document.getElementById('stLast').textContent = visits.length? timeAgo(visits[0].receivedAt)+' atrás' : '—';
+  }
+
+  async function load(){
+    if(!KEY){ KEY = prompt('Chave de acesso ao painel (DASHBOARD_KEY):') || ''; }
+    try{
+      const r = await api('GET');
+      if(r.status===401){
+        document.getElementById('list').innerHTML='<div class="err">🔒 Chave inválida ou ausente.<br><br><button class="btn" onclick="KEY=\'\';load()">Tentar outra chave</button></div>';
+        return;
+      }
+      const data = await r.json();
+      const visits = data.visits||[];
+      renderStats(visits);
+      document.getElementById('list').innerHTML = visits.length
+        ? visits.map(renderVisit).join('')
+        : '<div class="empty">Nenhum dado coletado ainda. Abra a landing page para gerar uma visita.</div>';
+    }catch(e){
+      document.getElementById('list').innerHTML='<div class="err">Erro ao carregar: '+esc(e.message)+'</div>';
+    }
+  }
+
+  async function clearAll(){
+    if(!confirm('Apagar TODOS os dados coletados? Esta ação não pode ser desfeita.')) return;
+    const r = await api('DELETE');
+    if(r.ok) load(); else alert('Falha ao limpar (chave?).');
+  }
+
+  load();
+  setInterval(load, 10000);
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+# Dependencias
+node_modules/
+server/node_modules/
+
+# Variaveis de ambiente (segredos / chaves)
+.env
+server/.env
+
+# Dados coletados (privacidade — nao versionar)
+server/data/visits.json
+
+# Logs / temporarios
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Config local do front (mantenha config.example.js versionado)
+# Descomente se quiser nao versionar a URL real da sua API:
+# config.js
+
+# Editor
+.vscode/

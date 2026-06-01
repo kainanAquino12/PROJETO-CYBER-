@@ -1,0 +1,24 @@
+# Dependencias (reinstaladas dentro da imagem)
+node_modules
+server/node_modules
+
+# Segredos / ambiente (passados via docker-compose, nao baked na imagem)
+.env
+server/.env
+
+# Dados coletados locais (montados via volume)
+server/data
+
+# Git / editor / temporarios
+.git
+.gitignore
+.vscode
+.claude
+*.log
+npm-debug.log*
+
+# Docs e arquivos Docker (nao precisam ir para dentro da imagem)
+*.md
+Dockerfile
+docker-compose.yml
+.dockerignore

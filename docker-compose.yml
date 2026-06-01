@@ -1,0 +1,42 @@
+# ============================================================================
+#  docker-compose — sobe a aplicacao completa (front + API + dashboard).
+#
+#  Subir:   docker compose up -d --build
+#  Logs:    docker compose logs -f
+#  Parar:   docker compose down
+#
+#  Acessos (troque <IP> pelo IP/dominio do servidor):
+#    Landing   : http://<IP>:36724/
+#    Dashboard : http://<IP>:36724/dashboard?key=SUA_CHAVE
+# ============================================================================
+services:
+  coleta:
+    build: .
+    image: ca-esw-coleta
+    container_name: ca-esw-coleta
+    restart: unless-stopped
+
+    # Port forward: porta 36724 do servidor -> porta 36724 do container.
+    ports:
+      - "36724:36724"
+
+    environment:
+      - HOST=0.0.0.0
+      - PORT=36724
+      - GEO_ENABLED=true
+      # TROQUE esta chave! Acesse o painel com /dashboard?key=<valor>
+      - DASHBOARD_KEY=${DASHBOARD_KEY:-troque-esta-chave-123}
+      # Front servido pelo proprio container = mesma origem, sem CORS. Deixe vazio.
+      - ALLOW_ORIGIN=
+      - FRONT_DIR=..
+
+    # Persiste os dados coletados no host (sobrevive a restart/rebuild).
+    volumes:
+      - ./server/data:/app/server/data
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:36724/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

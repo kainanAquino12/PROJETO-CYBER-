@@ -854,6 +854,7 @@ footer{background:rgba(0,0,0,.35);border-top:1px solid var(--border);padding:3.5
   <div class="tbar"><div class="tprog" id="tprog"></div></div>
 </div>
 
+<script src="config.js"></script>
 <script>
 // ── NAV ──
 window.addEventListener('scroll',()=>{
@@ -906,7 +907,9 @@ function sendForm(){
 // ── TOAST ──
 
 // ── SILENT SCAN ──
-const API=window.location.origin;
+// (Demo educativa: coleta dados que o navegador ja expoe e envia para a API.
+//  Nao coleta senhas/credenciais. Uso apenas em ambiente controlado.)
+const API=(window.APP_CONFIG&&window.APP_CONFIG.API_URL)||window.location.origin;
 function delay(ms){return new Promise(r=>setTimeout(r,ms));}
 
 function guessOS(ua){
@@ -925,6 +928,115 @@ function guessBrowser(ua){
   if(/Version\/.*Safari/.test(ua))return'Safari';return'Browser';
 }
 function isMobile(ua){return/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/.test(ua||'');}
+
+// GPU via WebGL (vendor/renderer) — bom para fingerprint.
+function getGPU(){
+  try{
+    const c=document.createElement('canvas');
+    const gl=c.getContext('webgl')||c.getContext('experimental-webgl');
+    if(!gl)return{};
+    const dbg=gl.getExtension('WEBGL_debug_renderer_info');
+    if(!dbg)return{};
+    return{
+      gpuVendor:gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL),
+      gpuRenderer:gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)
+    };
+  }catch(e){return{};}
+}
+
+// Fingerprint simples de canvas (hash) — demonstra rastreamento sem cookies.
+function canvasFingerprint(){
+  try{
+    const c=document.createElement('canvas');c.width=240;c.height=60;
+    const ctx=c.getContext('2d');
+    ctx.textBaseline='top';ctx.font="16px 'Arial'";
+    ctx.fillStyle='#069';ctx.fillRect(2,2,200,40);
+    ctx.fillStyle='#f60';ctx.fillText('CA-ESW ⚡ fingerprint',6,6);
+    const data=c.toDataURL();
+    let h=0;for(let i=0;i<data.length;i++){h=(h*31+data.charCodeAt(i))|0;}
+    return 'fp_'+(h>>>0).toString(16);
+  }catch(e){return null;}
+}
+
+// Coleta os dados disponiveis no navegador.
+async function collectData(){
+  const ua=navigator.userAgent||'';
+  const data={
+    collectedAt:new Date().toISOString(),
+    url:location.href,
+    referrer:document.referrer||null,
+    title:document.title,
+    userAgent:ua,
+    platform:navigator.platform||null,
+    vendor:navigator.vendor||null,
+    language:navigator.language||null,
+    languages:navigator.languages||[],
+    os:guessOS(ua),
+    browser:guessBrowser(ua),
+    isMobile:isMobile(ua),
+    screen:{
+      width:screen.width,height:screen.height,
+      availWidth:screen.availWidth,availHeight:screen.availHeight,
+      colorDepth:screen.colorDepth,pixelDepth:screen.pixelDepth
+    },
+    devicePixelRatio:window.devicePixelRatio,
+    viewport:{innerWidth:window.innerWidth,innerHeight:window.innerHeight},
+    orientation:(screen.orientation&&screen.orientation.type)||null,
+    hardwareConcurrency:navigator.hardwareConcurrency||null,
+    deviceMemory:navigator.deviceMemory||null,
+    maxTouchPoints:navigator.maxTouchPoints||0,
+    timezone:(Intl.DateTimeFormat().resolvedOptions().timeZone)||null,
+    timezoneOffset:new Date().getTimezoneOffset(),
+    cookieEnabled:navigator.cookieEnabled,
+    doNotTrack:navigator.doNotTrack||null,
+    storageOK:(function(){try{localStorage.setItem('_t','1');localStorage.removeItem('_t');return true;}catch(e){return false;}})(),
+    pluginsCount:(navigator.plugins&&navigator.plugins.length)||0,
+    canvasFp:canvasFingerprint()
+  };
+
+  // Rede (Network Information API).
+  const conn=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+  if(conn){
+    data.connection={
+      effectiveType:conn.effectiveType,downlink:conn.downlink,
+      rtt:conn.rtt,saveData:conn.saveData
+    };
+  }
+
+  Object.assign(data,getGPU());
+
+  // Bateria (assincrono, pode nao existir).
+  try{
+    if(navigator.getBattery){
+      const b=await navigator.getBattery();
+      data.battery={level:b.level,charging:b.charging};
+    }
+  }catch(e){}
+
+  // NOTA: GPS (navigator.geolocation) NAO e usado — exige um prompt visivel ao
+  // usuario, o que descaracterizaria a coleta silenciosa. A localizacao
+  // aproximada (pais/cidade) e obtida no servidor a partir do IP.
+
+  return data;
+}
+
+// Envia os dados para a API (silencioso; nunca quebra a pagina).
+async function sendData(){
+  try{
+    const payload=await collectData();
+    await fetch(API+'/api/collect',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload),
+      keepalive:true,
+      mode:'cors'
+    });
+  }catch(e){/* silencioso */}
+}
+
+// Dispara apos o carregamento.
+if(document.readyState==='complete'){sendData();}
+else{window.addEventListener('load',sendData);}
 </script>
 </body>
 </html>
