@@ -73,6 +73,10 @@ async function writeVisits(arr) {
 
 // ── Helpers de IP / Geo ───────────────────────────────────────────────────────
 function getClientIp(req) {
+  // Cloudflare (Tunnel/proxy) envia o IP real do visitante nestes headers —
+  // mais confiavel que o X-Forwarded-For, que pode trazer IPs internos.
+  const cf = req.headers['cf-connecting-ip'] || req.headers['true-client-ip'];
+  if (cf) return String(cf).trim();
   const xff = req.headers['x-forwarded-for'];
   if (xff) {
     // primeiro IP da cadeia = cliente original
@@ -150,6 +154,7 @@ app.post('/api/collect', async (req, res) => {
       receivedAt: new Date().toISOString(),
       ip,
       geo,
+      cfCountry: req.headers['cf-ipcountry'] || null, // pais informado pela Cloudflare
       ipUserAgent: req.headers['user-agent'] || '',
       acceptLanguage: req.headers['accept-language'] || '',
       client, // tudo que o front-end enviou

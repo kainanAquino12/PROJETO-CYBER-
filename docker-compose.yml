@@ -25,7 +25,7 @@ services:
       - PORT=36724
       - GEO_ENABLED=true
       # TROQUE esta chave! Acesse o painel com /dashboard?key=<valor>
-      - DASHBOARD_KEY=${DASHBOARD_KEY:-troque-esta-chave-123}
+      - DASHBOARD_KEY=kainajs
       # Front servido pelo proprio container = mesma origem, sem CORS. Deixe vazio.
       - ALLOW_ORIGIN=
       - FRONT_DIR=..
