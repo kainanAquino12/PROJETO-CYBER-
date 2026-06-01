@@ -15,7 +15,7 @@ RUN cd server && npm install --omit=dev
 COPY server/ ./server/
 
 # 3) Copia os arquivos do front-end (FRONT_DIR=.. aponta para /app).
-COPY ["ca_esw (3).html", "style.css", "config.js", "./"]
+COPY ["ca_esw (3).html", "style.css", "config.js", "logo.png", "./"]
 
 # Roda a partir da pasta do servidor (mesma estrutura do projeto local).
 WORKDIR /app/server

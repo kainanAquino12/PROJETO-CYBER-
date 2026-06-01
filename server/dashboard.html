@@ -48,7 +48,12 @@
   .empty{color:var(--gray);text-align:center;padding:60px 20px;font-size:15px}
 
   .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
-    margin-bottom:12px;overflow:hidden}
+    margin-bottom:12px;overflow:hidden;transition:border-color .4s ease, box-shadow .4s ease}
+  @keyframes newGlow{
+    0%{border-color:var(--gold3);box-shadow:0 0 0 1px var(--gold3),0 0 22px rgba(228,184,74,.45)}
+    100%{border-color:var(--border);box-shadow:none}
+  }
+  .card.new{animation:newGlow 2.4s ease-out}
   .card-head{display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;flex-wrap:wrap}
   .card-head:hover{background:var(--surface2)}
   .ip{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--gold3)}
@@ -119,7 +124,7 @@
 
   function kv(k,v){ if(v==null||v==='') return ''; return '<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+esc(v)+'</span></div>'; }
 
-  function renderVisit(v){
+  function renderVisit(v, isOpen, isNew){
     const c = v.client || {};
     const g = v.geo || null;
     const sc = c.screen || {};
@@ -135,6 +140,7 @@
       + '<span class="chip">'+(c.isMobile?'📱 Mobile':'💻 Desktop')+'</span>'
       + '<span class="chip">'+esc(c.os||'?')+'</span>'
       + '<span class="chip">'+esc(c.browser||'?')+'</span>'
+      + (c.deviceModel?'<span class="chip">📲 '+esc(c.deviceModel)+'</span>':'')
       + (sc.width?'<span class="chip">'+esc(sc.width+'×'+sc.height)+'</span>':'')
       + '<span class="toggle">'+timeAgo(v.receivedAt)+' atrás ▾</span>'
       + '</div>';
@@ -158,6 +164,22 @@
       + kv('Bateria', c.battery? (Math.round((c.battery.level||0)*100)+'% '+(c.battery.charging?'(carregando)':'')):'')
       + kv('GPU', c.gpuRenderer)
       + kv('Canvas FP', c.canvasFp)
+      + kv('Modelo do aparelho', c.deviceModel)
+      + kv('Versão do SO', c.platformVersion)
+      + kv('Arquitetura', c.uaArch? (c.uaArch+(c.uaBitness?' '+c.uaBitness+'bit':'')):'')
+      + kv('Versões do navegador', (c.fullVersionList||[]).join(', '))
+      + kv('Câmeras', c.mediaDevices&&c.mediaDevices.cameras)
+      + kv('Microfones', c.mediaDevices&&c.mediaDevices.microphones)
+      + kv('Alto-falantes', c.mediaDevices&&c.mediaDevices.speakers)
+      + kv('Permissões', c.permissions? Object.entries(c.permissions).map(p=>p[0]+'='+p[1]).join(', '):'')
+      + kv('Tema escuro', c.prefs? (c.prefs.darkMode?'sim':'não'):'')
+      + kv('Movimento reduzido', c.prefs? (c.prefs.reducedMotion?'sim':'não'):'')
+      + kv('Cores P3 / HDR', c.prefs? ((c.prefs.colorGamutP3?'P3':'sRGB')+(c.prefs.hdr?' / HDR':'')):'')
+      + kv('Armazenamento', c.storage? (c.storage.usageMB+' MB usados de '+c.storage.quotaMB+' MB'):'')
+      + kv('Fontes detectadas', c.fonts? (c.fonts.length+': '+c.fonts.join(', ')):'')
+      + kv('IPs locais (WebRTC)', (c.localIPs||[]).join(', '))
+      + kv('País (Cloudflare)', v.cfCountry)
+      + kv('GPC (privacidade)', c.gpc==null?'':String(c.gpc))
       + kv('Cookies', c.cookieEnabled===false?'desativados':'ativados')
       + kv('Do Not Track', c.doNotTrack)
       + kv('Página', c.url) + kv('Veio de (referrer)', c.referrer)
@@ -168,7 +190,7 @@
       + '<details><summary>Ver JSON bruto completo</summary><pre>'+esc(JSON.stringify(v,null,2))+'</pre></details>'
       + '</div>';
 
-    return '<div class="card">'+head+body+'</div>';
+    return '<div class="card'+(isOpen?' open':'')+(isNew?' new':'')+'" data-id="'+esc(v.id)+'">'+head+body+'</div>';
   }
 
   function renderStats(visits){
@@ -180,29 +202,49 @@
     document.getElementById('stLast').textContent = visits.length? timeAgo(visits[0].receivedAt)+' atrás' : '—';
   }
 
+  // Estado para o "smooth reload": evita re-renderizar (e fechar os cards) se nada mudou.
+  let lastSig = '';
+  let knownIds = new Set();
+
   async function load(){
     if(!KEY){ KEY = prompt('Chave de acesso ao painel (DASHBOARD_KEY):') || ''; }
+    const list = document.getElementById('list');
     try{
       const r = await api('GET');
       if(r.status===401){
-        document.getElementById('list').innerHTML='<div class="err">🔒 Chave inválida ou ausente.<br><br><button class="btn" onclick="KEY=\'\';load()">Tentar outra chave</button></div>';
+        lastSig=''; knownIds=new Set();
+        list.innerHTML='<div class="err">🔒 Chave inválida ou ausente.<br><br><button class="btn" onclick="KEY=\'\';load()">Tentar outra chave</button></div>';
         return;
       }
       const data = await r.json();
       const visits = data.visits||[];
       renderStats(visits);
-      document.getElementById('list').innerHTML = visits.length
-        ? visits.map(renderVisit).join('')
+
+      // Assinatura: se total e a visita mais recente nao mudaram, nao mexe no DOM.
+      const sig = visits.length + '|' + (visits[0] ? visits[0].id : '');
+      if(sig === lastSig) return;
+
+      // Preserva o que estava aberto e a posicao do scroll.
+      const openIds = new Set([...list.querySelectorAll('.card.open')].map(c=>c.dataset.id));
+      const scrollY = window.scrollY;
+      const firstLoad = lastSig === '';
+
+      list.innerHTML = visits.length
+        ? visits.map(v=>renderVisit(v, openIds.has(v.id), !firstLoad && !knownIds.has(v.id))).join('')
         : '<div class="empty">Nenhum dado coletado ainda. Abra a landing page para gerar uma visita.</div>';
+
+      knownIds = new Set(visits.map(v=>v.id));
+      lastSig = sig;
+      window.scrollTo(0, scrollY);
     }catch(e){
-      document.getElementById('list').innerHTML='<div class="err">Erro ao carregar: '+esc(e.message)+'</div>';
+      list.innerHTML='<div class="err">Erro ao carregar: '+esc(e.message)+'</div>';
     }
   }
 
   async function clearAll(){
     if(!confirm('Apagar TODOS os dados coletados? Esta ação não pode ser desfeita.')) return;
     const r = await api('DELETE');
-    if(r.ok) load(); else alert('Falha ao limpar (chave?).');
+    if(r.ok){ lastSig=''; knownIds=new Set(); load(); } else alert('Falha ao limpar (chave?).');
   }
 
   load();
