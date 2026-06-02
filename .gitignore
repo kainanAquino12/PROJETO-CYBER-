@@ -4,7 +4,7 @@ server/node_modules/
 
 # Variaveis de ambiente (segredos / chaves)
 .env
-server/.env
+server/.env.example
 
 # Dados coletados (privacidade — nao versionar)
 server/data/visits.json
