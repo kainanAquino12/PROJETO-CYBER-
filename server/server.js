@@ -23,17 +23,25 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs/promises');
 const fssync = require('fs');
+const crypto = require('crypto');
 
 // ── Config (via .env) ──────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0'; // 0.0.0.0 = aceita conexoes externas (Docker)
 const GEO_ENABLED = String(process.env.GEO_ENABLED || 'true').toLowerCase() === 'true';
-const DASHBOARD_KEY = process.env.DASHBOARD_KEY || '';
 const ALLOW_ORIGIN = process.env.ALLOW_ORIGIN || '';
 // Pasta do front-end (landing page + config.js + style.css). Padrao: pasta-pai.
 const FRONT_DIR = path.resolve(__dirname, process.env.FRONT_DIR || '..');
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'visits.json');
+const AUTH_FILE = path.join(DATA_DIR, 'auth.json');
+
+// E-mails autorizados a acessar o painel. SOMENTE estes podem cadastrar senha
+// e fazer login. Qualquer outro e-mail e recusado de imediato.
+const ALLOWED_EMAILS = [
+  'lucaskronbauer16@gmail.com',
+  'kainanneres262@gmail.com',
+];
 
 // Nome do arquivo da landing page (tem espaco e parenteses no nome original).
 const LANDING_FILE = 'ca_esw (3).html';
@@ -55,6 +63,7 @@ async function ensureStore() {
   if (!fssync.existsSync(DATA_FILE)) {
     await fs.writeFile(DATA_FILE, '[]', 'utf8');
   }
+  await ensureAuth(); // garante o segredo de assinatura dos tokens
 }
 
 async function readVisits() {
@@ -132,12 +141,90 @@ async function lookupGeo(ip) {
   }
 }
 
-// ── Auth simples para o painel ────────────────────────────────────────────────
-function checkKey(req, res, next) {
-  if (!DASHBOARD_KEY) return next(); // sem chave configurada = aberto (apenas dev)
-  const provided = req.query.key || req.headers['x-key'] || '';
-  if (provided === DASHBOARD_KEY) return next();
-  res.status(401).json({ ok: false, error: 'chave invalida ou ausente' });
+// ── Autenticacao do painel (e-mail autorizado + senha) ───────────────────────
+const SCRYPT_KEYLEN = 64;
+const TOKEN_TTL_MS = 1000 * 60 * 60 * 12; // sessao valida por 12h
+
+function normEmail(e) { return String(e || '').trim().toLowerCase(); }
+function isAllowedEmail(email) { return ALLOWED_EMAILS.includes(normEmail(email)); }
+
+async function readAuth() {
+  try {
+    const obj = JSON.parse(await fs.readFile(AUTH_FILE, 'utf8'));
+    if (obj && typeof obj === 'object') {
+      if (!obj.users || typeof obj.users !== 'object') obj.users = {};
+      return obj;
+    }
+  } catch { /* ausente/invalido -> recria abaixo */ }
+  return { secret: '', users: {} };
+}
+async function writeAuth(obj) {
+  await fs.writeFile(AUTH_FILE, JSON.stringify(obj, null, 2), 'utf8');
+}
+// Garante um segredo para assinar os tokens de sessao (gerado uma unica vez).
+async function ensureAuth() {
+  const auth = await readAuth();
+  if (!auth.secret) {
+    auth.secret = crypto.randomBytes(32).toString('hex');
+    await writeAuth(auth);
+  }
+  return auth;
+}
+
+// Hash de senha com scrypt (sem dependencia externa). Guarda salt + hash.
+function hashPassword(password, salt) {
+  const s = salt || crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(String(password), s, SCRYPT_KEYLEN).toString('hex');
+  return { salt: s, hash };
+}
+function verifyPassword(password, salt, expectedHash) {
+  const a = Buffer.from(hashPassword(password, salt).hash, 'hex');
+  const b = Buffer.from(String(expectedHash || ''), 'hex');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// ── Token de sessao stateless: base64url(payload).base64url(hmac) ─────────────
+function b64url(buf) {
+  return Buffer.from(buf).toString('base64')
+    .replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+}
+function unb64url(str) {
+  return Buffer.from(String(str).replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+}
+function signPayload(payloadB64, secret) {
+  return b64url(crypto.createHmac('sha256', secret).update(payloadB64).digest());
+}
+function makeToken(email, secret) {
+  const p = b64url(JSON.stringify({ email: normEmail(email), exp: Date.now() + TOKEN_TTL_MS }));
+  return p + '.' + signPayload(p, secret);
+}
+function verifyToken(token, secret) {
+  if (!token || typeof token !== 'string' || !token.includes('.')) return null;
+  const [p, sig] = token.split('.');
+  if (!p || !sig) return null;
+  const expected = signPayload(p, secret);
+  const a = Buffer.from(sig), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let payload;
+  try { payload = JSON.parse(unb64url(p)); } catch { return null; }
+  if (!payload || !payload.exp || Date.now() > payload.exp) return null;
+  if (!isAllowedEmail(payload.email)) return null; // e-mail saiu da allowlist -> token invalido
+  return payload;
+}
+function getToken(req) {
+  const h = req.headers['authorization'] || '';
+  if (h.startsWith('Bearer ')) return h.slice(7).trim();
+  return req.query.token || req.headers['x-token'] || '';
+}
+
+// Middleware: exige um token de sessao valido (ou seja, login ja feito).
+async function checkAuth(req, res, next) {
+  const store = await readAuth();
+  if (!store.secret) return res.status(503).json({ ok: false, error: 'autenticacao nao inicializada' });
+  const payload = verifyToken(getToken(req), store.secret);
+  if (!payload) return res.status(401).json({ ok: false, error: 'nao autenticado' });
+  req.userEmail = payload.email;
+  next();
 }
 
 // ── Rotas ─────────────────────────────────────────────────────────────────────
@@ -172,15 +259,56 @@ app.post('/api/collect', async (req, res) => {
 });
 
 // Lista os dados coletados (protegida) — mais recentes primeiro.
-app.get('/api/visits', checkKey, async (req, res) => {
+app.get('/api/visits', checkAuth, async (req, res) => {
   const visits = await readVisits();
   res.json({ ok: true, total: visits.length, visits: visits.slice().reverse() });
 });
 
 // Limpa os dados (protegida).
-app.delete('/api/visits', checkKey, async (req, res) => {
+app.delete('/api/visits', checkAuth, async (req, res) => {
   await writeVisits([]);
   res.json({ ok: true });
+});
+
+// ── Login do painel: somente e-mails autorizados ────────────────────────────
+
+// Status do e-mail: e autorizado? ja tem senha cadastrada? (controla o botao do front)
+app.get('/api/auth/status', async (req, res) => {
+  const email = normEmail(req.query.email);
+  if (!isAllowedEmail(email)) return res.json({ ok: true, allowed: false, registered: false });
+  const store = await readAuth();
+  const registered = !!(store.users[email] && store.users[email].hash);
+  res.json({ ok: true, allowed: true, registered });
+});
+
+// Cadastra a senha de um e-mail autorizado (apenas no primeiro acesso).
+app.post('/api/auth/register', async (req, res) => {
+  const email = normEmail(req.body && req.body.email);
+  const password = String((req.body && req.body.password) || '');
+  if (!isAllowedEmail(email)) return res.status(403).json({ ok: false, error: 'e-mail nao autorizado' });
+  if (password.length < 4) return res.status(400).json({ ok: false, error: 'senha muito curta (minimo 4 caracteres)' });
+  const store = await ensureAuth();
+  if (store.users[email] && store.users[email].hash) {
+    return res.status(409).json({ ok: false, error: 'este e-mail ja tem senha cadastrada — faca login' });
+  }
+  const { salt, hash } = hashPassword(password);
+  store.users[email] = { salt, hash, createdAt: new Date().toISOString() };
+  await writeAuth(store);
+  res.json({ ok: true, token: makeToken(email, store.secret), email });
+});
+
+// Login com e-mail autorizado + senha ja cadastrada.
+app.post('/api/auth/login', async (req, res) => {
+  const email = normEmail(req.body && req.body.email);
+  const password = String((req.body && req.body.password) || '');
+  if (!isAllowedEmail(email)) return res.status(403).json({ ok: false, error: 'e-mail nao autorizado' });
+  const store = await ensureAuth();
+  const u = store.users[email];
+  if (!u || !u.hash) return res.status(404).json({ ok: false, error: 'e-mail sem senha cadastrada' });
+  if (!verifyPassword(password, u.salt, u.hash)) {
+    return res.status(401).json({ ok: false, error: 'senha incorreta' });
+  }
+  res.json({ ok: true, token: makeToken(email, store.secret), email });
 });
 
 // config.js dinamico: injeta a URL da API a partir do .env do servidor.
@@ -212,7 +340,8 @@ ensureStore().then(() => {
     console.log('----------------------------------------------------------------');
     console.log(`  Escutando : ${HOST}:${PORT}`);
     console.log(`  Landing   : http://localhost:${PORT}/`);
-    console.log(`  Dashboard : http://localhost:${PORT}/dashboard?key=${DASHBOARD_KEY || '(sem chave)'}`);
+    console.log(`  Dashboard : http://localhost:${PORT}/dashboard  (login por e-mail + senha)`);
+    console.log(`  Autorizados: ${ALLOWED_EMAILS.join(', ')}`);
     console.log(`  Geo-IP    : ${GEO_ENABLED ? 'ligado (ip-api.com)' : 'desligado'}`);
     console.log(`  Dados     : ${DATA_FILE}`);
     console.log('================================================================');

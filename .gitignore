@@ -3,11 +3,13 @@ node_modules/
 server/node_modules/
 
 # Variaveis de ambiente (segredos / chaves)
+# Obs: o .env.example E versionado de proposito (template, sem segredos reais).
 .env
-server/.env.example
+server/.env
 
-# Dados coletados (privacidade — nao versionar)
-server/data/visits.json
+# Dados coletados + credenciais do painel (privacidade — NAO versionar).
+# Inclui visits.json e auth.json (hashes de senha + segredo dos tokens).
+server/data/
 
 # Logs / temporarios
 *.log

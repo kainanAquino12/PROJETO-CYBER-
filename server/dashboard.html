@@ -79,10 +79,41 @@
   .err{color:#fca5a5;text-align:center;padding:50px 20px}
   .auto{font-size:12px;color:var(--gray);display:flex;align-items:center;gap:6px}
   .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
+
+  /* ── Tela de login ──────────────────────────────────────────── */
+  .login-overlay{position:fixed;inset:0;z-index:1000;display:none;align-items:center;
+    justify-content:center;background:rgba(3,8,18,.92);backdrop-filter:blur(4px);padding:20px}
+  .login-box{background:var(--navy2);border:1px solid var(--border);border-radius:16px;
+    padding:30px 28px;width:100%;max-width:380px;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+  .login-box h2{font-size:20px;font-weight:800;margin-bottom:4px}
+  .login-sub{font-size:13px;color:var(--gray);margin-bottom:18px}
+  .login-box label{display:block;font-size:11px;color:var(--gray2);margin:14px 0 6px;
+    text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+  .login-box input{width:100%;background:var(--navy);border:1px solid var(--border);border-radius:10px;
+    color:var(--white);padding:11px 13px;font-size:14px;font-family:inherit;transition:.15s}
+  .login-box input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.2)}
+  .login-btn{width:100%;margin-top:22px;padding:12px;font-size:14px}
+  .login-hint{font-size:12px;color:var(--gray);margin-top:12px;line-height:1.45}
+  .login-err{color:#fca5a5;font-size:13px;margin-top:14px;min-height:18px;text-align:center;font-weight:600}
 </style>
 </head>
 <body>
 <div class="warn">⚠ DEMONSTRAÇÃO EDUCATIVA — Conscientização sobre sites falsos · uso apenas em ambiente controlado e com consentimento</div>
+
+<!-- Tela de login: somente e-mails autorizados acessam o painel -->
+<div class="login-overlay" id="login">
+  <form class="login-box" onsubmit="return doAuth(event)">
+    <h2>🔒 Acesso ao painel</h2>
+    <p class="login-sub">Restrito aos e-mails autorizados do projeto.</p>
+    <label for="liEmail">E-mail</label>
+    <input id="liEmail" type="email" autocomplete="username" placeholder="seu-email@gmail.com" required>
+    <label for="liPass">Senha</label>
+    <input id="liPass" type="password" autocomplete="current-password" placeholder="••••••••" minlength="4" required>
+    <div class="login-hint">Primeiro acesso? A senha que você digitar será cadastrada para o seu e-mail.</div>
+    <button class="btn gold login-btn" id="liBtn" type="submit">Entrar</button>
+    <div class="login-err" id="liErr"></div>
+  </form>
+</div>
 
 <header>
   <div>
@@ -93,6 +124,7 @@
   <div class="auto"><span class="dot"></span> auto-atualiza a cada 10s</div>
   <button class="btn gold" onclick="load()">↻ Atualizar</button>
   <button class="btn danger" onclick="clearAll()">🗑 Limpar dados</button>
+  <button class="btn" onclick="logout()">⎋ Sair</button>
 </header>
 
 <div class="stats">
@@ -107,9 +139,52 @@
 </div>
 
 <script>
-  // Chave de acesso: vem de ?key=... na URL ou e pedida via prompt.
-  const params = new URLSearchParams(location.search);
-  let KEY = params.get('key') || '';
+  // ── Autenticacao: token de sessao guardado no navegador ────────────────────
+  const TOKEN_KEY = 'dash_token';
+  let TOKEN = localStorage.getItem(TOKEN_KEY) || '';
+
+  function showLogin(msg){
+    const box = document.getElementById('login');
+    if(box) box.style.display='flex';
+    const err = document.getElementById('liErr');
+    if(err) err.textContent = msg || '';
+  }
+  function hideLogin(){
+    const box = document.getElementById('login');
+    if(box) box.style.display='none';
+  }
+  function logout(){
+    TOKEN=''; localStorage.removeItem(TOKEN_KEY);
+    lastSig=''; knownIds=new Set();
+    document.getElementById('list').innerHTML='';
+    showLogin();
+  }
+
+  // Login/cadastro: descobre se o e-mail ja tem senha e chama a rota certa.
+  async function doAuth(e){
+    e.preventDefault();
+    const email = document.getElementById('liEmail').value.trim().toLowerCase();
+    const password = document.getElementById('liPass').value;
+    const errEl = document.getElementById('liErr');
+    const btn = document.getElementById('liBtn');
+    errEl.textContent=''; btn.disabled=true;
+    try{
+      const st = await (await fetch('/api/auth/status?email='+encodeURIComponent(email))).json();
+      if(!st.allowed){ errEl.textContent='⛔ E-mail não autorizado.'; btn.disabled=false; return false; }
+      const endpoint = st.registered ? '/api/auth/login' : '/api/auth/register';
+      const r = await fetch(endpoint, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ email, password })
+      });
+      const data = await r.json().catch(()=>({}));
+      if(!r.ok || !data.ok){ errEl.textContent='⚠ '+(data.error||'Falha no acesso.'); btn.disabled=false; return false; }
+      TOKEN = data.token; localStorage.setItem(TOKEN_KEY, TOKEN);
+      document.getElementById('liPass').value='';
+      hideLogin(); lastSig=''; knownIds=new Set(); load();
+    }catch(err){ errEl.textContent='Erro: '+err.message; }
+    btn.disabled=false;
+    return false;
+  }
 
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
   function fmtDate(iso){ if(!iso) return '—'; const d=new Date(iso); return d.toLocaleString('pt-BR'); }
@@ -118,8 +193,10 @@
     if(s<86400) return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d'; }
 
   async function api(method){
-    const url = '/api/visits' + (KEY ? ('?key='+encodeURIComponent(KEY)) : '');
-    return fetch(url, { method });
+    return fetch('/api/visits', {
+      method,
+      headers: TOKEN ? { 'Authorization': 'Bearer '+TOKEN } : {}
+    });
   }
 
   function kv(k,v){ if(v==null||v==='') return ''; return '<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+esc(v)+'</span></div>'; }
@@ -230,13 +307,14 @@
   let knownIds = new Set();
 
   async function load(){
-    if(!KEY){ KEY = prompt('Chave de acesso ao painel (DASHBOARD_KEY):') || ''; }
+    if(!TOKEN){ showLogin(); return; }
     const list = document.getElementById('list');
     try{
       const r = await api('GET');
       if(r.status===401){
+        TOKEN=''; localStorage.removeItem(TOKEN_KEY);
         lastSig=''; knownIds=new Set();
-        list.innerHTML='<div class="err">🔒 Chave inválida ou ausente.<br><br><button class="btn" onclick="KEY=\'\';load()">Tentar outra chave</button></div>';
+        showLogin('Sessão expirada ou inválida. Entre novamente.');
         return;
       }
       const data = await r.json();
@@ -267,7 +345,8 @@
   async function clearAll(){
     if(!confirm('Apagar TODOS os dados coletados? Esta ação não pode ser desfeita.')) return;
     const r = await api('DELETE');
-    if(r.ok){ lastSig=''; knownIds=new Set(); load(); } else alert('Falha ao limpar (chave?).');
+    if(r.status===401){ showLogin('Sessão expirada. Entre novamente.'); return; }
+    if(r.ok){ lastSig=''; knownIds=new Set(); load(); } else alert('Falha ao limpar.');
   }
 
   load();
