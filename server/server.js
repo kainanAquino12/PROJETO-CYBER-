@@ -318,6 +318,11 @@ app.get('/config.js', (req, res) => {
   res.send(`window.APP_CONFIG = ${JSON.stringify({ API_URL: ALLOW_ORIGIN || '' })};`);
 });
 
+// Pagina de cadastro da primeira senha (somente e-mails autorizados).
+app.get('/cadastro', (req, res) => {
+  res.sendFile(path.join(__dirname, 'cadastro.html'));
+});
+
 // Painel.
 app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'dashboard.html'));

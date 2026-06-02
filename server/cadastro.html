@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Cadastrar senha · Painel — Demo educativa</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --navy:#07111f;--navy2:#0c1d36;--navy3:#122548;
+    --blue:#2563eb;--blue4:#60a5fa;
+    --gold:#b07d20;--gold2:#c99530;--gold3:#e4b84a;
+    --white:#eef2ff;--gray:#7a8ba8;--gray2:#b0bdd4;
+    --border:rgba(255,255,255,0.08);--surface:rgba(255,255,255,0.03);
+    --danger:#ef4444;--ok:#22c55e;
+    --sans:'Segoe UI',system-ui,sans-serif;
+  }
+  body{background:var(--navy);color:var(--white);font-family:var(--sans);line-height:1.5;
+    min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .card{background:var(--navy2);border:1px solid var(--border);border-radius:16px;
+    padding:32px 28px;width:100%;max-width:400px;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+  .badge{display:inline-block;background:linear-gradient(90deg,#3a1d00,#1a0e00);
+    border:1px solid var(--gold);color:var(--gold3);font-size:11px;font-weight:700;
+    padding:4px 10px;border-radius:999px;letter-spacing:.04em;margin-bottom:16px}
+  h1{font-size:22px;font-weight:800;letter-spacing:-.4px}
+  h1 span{color:var(--gold3)}
+  .sub{font-size:13px;color:var(--gray);margin-top:6px;margin-bottom:22px}
+  label{display:block;font-size:11px;color:var(--gray2);margin:16px 0 6px;
+    text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+  input{width:100%;background:var(--navy);border:1px solid var(--border);border-radius:10px;
+    color:var(--white);padding:11px 13px;font-size:14px;font-family:inherit;transition:.15s}
+  input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.2)}
+  .btn{width:100%;margin-top:24px;background:var(--gold);border:1px solid var(--gold2);
+    color:#1a0e00;padding:12px;border-radius:10px;font-size:14px;font-weight:700;
+    cursor:pointer;transition:.15s;font-family:inherit}
+  .btn:hover:not(:disabled){background:var(--gold2)}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+  .hint{font-size:12px;color:var(--gray);margin-top:12px;line-height:1.45}
+  .msg{font-size:13px;margin-top:16px;min-height:18px;text-align:center;font-weight:600}
+  .err{color:#fca5a5}
+  .ok{color:#86efac}
+  .foot{margin-top:22px;text-align:center;font-size:13px;color:var(--gray);
+    border-top:1px solid var(--border);padding-top:16px}
+  .foot a{color:var(--blue4);text-decoration:none;font-weight:600}
+  .foot a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+  <form class="card" onsubmit="return cadastrar(event)">
+    <div class="badge">⚠ DEMONSTRAÇÃO EDUCATIVA</div>
+    <h1>Cadastrar <span>senha</span></h1>
+    <p class="sub">Primeiro acesso ao painel. Restrito aos e-mails autorizados do projeto.</p>
+
+    <label for="email">E-mail autorizado</label>
+    <input id="email" type="email" autocomplete="username" placeholder="seu-email@gmail.com" required>
+
+    <label for="pass">Nova senha</label>
+    <input id="pass" type="password" autocomplete="new-password" placeholder="mínimo 4 caracteres" minlength="4" required>
+
+    <label for="pass2">Confirmar senha</label>
+    <input id="pass2" type="password" autocomplete="new-password" placeholder="repita a senha" minlength="4" required>
+
+    <div class="hint">A senha é guardada de forma segura (hash). Só estes e-mails conseguem cadastrar.</div>
+
+    <button class="btn" id="btn" type="submit">Cadastrar senha e entrar</button>
+    <div class="msg err" id="err"></div>
+    <div class="msg ok" id="ok"></div>
+
+    <div class="foot">Já tem senha? <a href="/dashboard">Ir para o login do painel →</a></div>
+  </form>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  async function cadastrar(e){
+    e.preventDefault();
+    const email = $('email').value.trim().toLowerCase();
+    const p1 = $('pass').value, p2 = $('pass2').value;
+    const err = $('err'), ok = $('ok'), btn = $('btn');
+    err.textContent=''; ok.textContent='';
+
+    if(p1.length < 4){ err.textContent='A senha precisa ter pelo menos 4 caracteres.'; return false; }
+    if(p1 !== p2){ err.textContent='As senhas não coincidem.'; return false; }
+
+    btn.disabled = true;
+    try{
+      // Confirma se o e-mail e autorizado e ainda nao tem senha.
+      const st = await (await fetch('/api/auth/status?email='+encodeURIComponent(email))).json();
+      if(!st.allowed){
+        err.textContent='⛔ E-mail não autorizado. Apenas e-mails do projeto podem cadastrar.';
+        btn.disabled=false; return false;
+      }
+      if(st.registered){
+        err.textContent='Este e-mail já tem senha. Use o login do painel.';
+        btn.disabled=false; return false;
+      }
+
+      const r = await fetch('/api/auth/register', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ email, password: p1 })
+      });
+      const data = await r.json().catch(()=>({}));
+      if(!r.ok || !data.ok){
+        err.textContent='⚠ '+(data.error || 'Falha ao cadastrar.');
+        btn.disabled=false; return false;
+      }
+
+      // Cadastrou: ja entra logado no painel.
+      localStorage.setItem('dash_token', data.token);
+      ok.textContent='✅ Senha cadastrada! Entrando no painel…';
+      setTimeout(()=>{ location.href='/dashboard'; }, 1200);
+    }catch(ex){
+      err.textContent='Erro: '+ex.message;
+      btn.disabled=false;
+    }
+    return false;
+  }
+</script>
+</body>
+</html>
