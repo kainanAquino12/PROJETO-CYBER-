@@ -1,0 +1,25 @@
+# ============================================================
+#  Render Blueprint — Site institucional do CA (landing + coleta).
+#  No Render: New + > Blueprint > conecte este repositório.
+#
+#  IMPORTANTE: depois que o PAINEL estiver no ar, edite ERP_API_URL
+#  abaixo (ou nas Environment Variables do serviço no Render) com a
+#  URL pública real do painel.
+# ============================================================
+services:
+  - type: web
+    name: projeto-cyber-site
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      # URL pública da API do PAINEL (de onde o site puxa eventos/membros).
+      # Troque pela URL real do painel no Render.
+      - key: ERP_API_URL
+        value: https://ca-erp-painel.onrender.com
+      # Front servido pelo próprio container = mesma origem (sem CORS na coleta).
+      - key: ALLOW_ORIGIN
+        value: ""
+      - key: GEO_ENABLED
+        value: "true"

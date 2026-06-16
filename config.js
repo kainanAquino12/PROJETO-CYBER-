@@ -10,5 +10,8 @@
 // (Quando servido pelo Node, a rota /config.js sobrescreve este arquivo com o
 //  valor de ALLOW_ORIGIN do .env do servidor.)
 window.APP_CONFIG = {
-  API_URL: "http://localhost:3000"
+  API_URL: "http://localhost:3000",
+  // URL da API do ERP (painel). É de onde o site puxa Eventos e Diretoria.
+  // Local (Docker do ERP): http://localhost:3000 · Hospedado: a URL pública da API.
+  ERP_API_URL: "http://localhost:3000"
 };

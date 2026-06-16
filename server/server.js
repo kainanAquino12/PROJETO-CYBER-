@@ -30,6 +30,9 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0'; // 0.0.0.0 = aceita conexoes externas (Docker)
 const GEO_ENABLED = String(process.env.GEO_ENABLED || 'true').toLowerCase() === 'true';
 const ALLOW_ORIGIN = process.env.ALLOW_ORIGIN || '';
+// URL da API do ERP (painel) que o NAVEGADOR usa para puxar Eventos e Diretoria.
+// É a URL acessível pelo navegador do visitante (ex.: http://localhost:3000 no local).
+const ERP_API_URL = process.env.ERP_API_URL || 'http://localhost:3000';
 // Pasta do front-end (landing page + config.js + style.css). Padrao: pasta-pai.
 const FRONT_DIR = path.resolve(__dirname, process.env.FRONT_DIR || '..');
 const DATA_DIR = path.join(__dirname, 'data');
@@ -315,7 +318,7 @@ app.post('/api/auth/login', async (req, res) => {
 // Quando o front e servido por este mesmo app, API_URL fica vazio (mesma origem).
 app.get('/config.js', (req, res) => {
   res.type('application/javascript');
-  res.send(`window.APP_CONFIG = ${JSON.stringify({ API_URL: ALLOW_ORIGIN || '' })};`);
+  res.send(`window.APP_CONFIG = ${JSON.stringify({ API_URL: ALLOW_ORIGIN || '', ERP_API_URL })};`);
 });
 
 // Pagina de cadastro da primeira senha (somente e-mails autorizados).
