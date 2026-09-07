@@ -1,0 +1,26 @@
+{
+  "name": "ca-esw-bg-island",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Ilha React do background interativo (animate-ui Stars + constelação) da landing CA ESW.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "motion": "^11.18.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "vite-plugin-css-injected-by-js": "^3.5.2"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "_leia": "Redes sociais dos membros da diretoria. Preencha as URLs. Deixe \"\" (vazio) para esconder um ícone específico. O campo \"nome\" precisa bater com o nome exibido no card (o casamento ignora acentos e maiúsculas). Membros que não estiverem aqui simplesmente não mostram ícones. Depois de editar, é só salvar e recarregar a página — não precisa buildar nada.",
+  "membros": [
+    {
+      "nome": "Vinicius Fabris Dalla Costa",
+      "linkedin": "https://www.linkedin.com/in/EDITAR",
+      "github": "https://github.com/EDITAR",
+      "instagram": "https://instagram.com/EDITAR"
+    },
+    {
+      "nome": "Kainan Aquino",
+      "linkedin": "https://www.linkedin.com/in/EDITAR",
+      "github": "https://github.com/EDITAR",
+      "instagram": "https://instagram.com/EDITAR"
+    }
+  ]
+}
