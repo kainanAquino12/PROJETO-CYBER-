@@ -129,21 +129,4 @@
     }
     meterBars.appendChild(frag);
   }
-
-  /* ── TOAST "coleta técnica": barra de progresso indeterminada ────────────── */
-  var toast = document.getElementById('scanToast');
-  var prog = document.getElementById('tprog');
-  if (toast && prog && !reduceMotion) {
-    // pequeno atraso para entrar depois do carregamento, e some sozinho
-    setTimeout(function () { toast.classList.add('show'); }, 1400);
-    var pct = 0;
-    var timer = setInterval(function () {
-      pct = Math.min(100, pct + Math.random() * 18);
-      prog.style.width = pct.toFixed(0) + '%';
-      if (pct >= 100) {
-        clearInterval(timer);
-        setTimeout(function () { toast.classList.remove('show'); }, 900);
-      }
-    }, 380);
-  }
 })();
