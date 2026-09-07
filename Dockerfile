@@ -15,7 +15,11 @@ RUN cd server && npm install --omit=dev
 COPY server/ ./server/
 
 # 3) Copia os arquivos do front-end (FRONT_DIR=.. aponta para /app).
-COPY ["ca_esw (3).html", "style.css", "config.js", "erp-sync.js", "logo.png", "./"]
+#    Arquivos "soltos" na raiz do front:
+COPY ["ca_esw (3).html", "styles.css", "main.js", "collect.js", "config.js", "erp-sync.js", "diretoria-social.js", "logo.png", "./"]
+#    Pasta de assets (imagens + bundle do background + JSON da diretoria).
+#    Precisa de COPY proprio: com "./" o Docker achataria o conteudo na raiz.
+COPY assets/ ./assets/
 
 # Roda a partir da pasta do servidor (mesma estrutura do projeto local).
 WORKDIR /app/server
